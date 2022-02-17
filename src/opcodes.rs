@@ -86,7 +86,7 @@ pub enum MessageData {
     ///
     /// The server MUST reply with a HEARTBEAT_ACK message back in a reasonable
     /// time period.
-    HEARTBEAT,
+    HEARTBEAT {},
 
     /// Sent by the server in reply to a HEARTBEAT message coming from the client.
     ///
@@ -218,19 +218,21 @@ pub enum InfoData {
 /// **Note:** the snowflake type follows the same rules as the Discord Gateway's
 /// snowflake type: A string encoding a Discord Snowflake.
 #[derive(Deserialize, Serialize)]
-struct SocketMessage {
+pub struct SocketMessage {
     /// Operator code
-    op: OpCode,
+    pub op: OpCode,
 
     /// Message data
-    d: MessageData
+    pub d: MessageData
 }
 
-pub fn check_if_opcode(msg: Message) -> Result<(), ()> {
+pub fn check_if_opcode(msg: Message) -> Result<(OpCode, MessageData), ()> {
     let message_json: Result<SocketMessage, serde_json::Error> = serde_json::from_str(msg.to_text().expect("Failed to convert message to str!"));
 
     if message_json.is_ok() {
-        Ok(println!("{}", message_json.unwrap().op as u8))
+        let output = message_json.unwrap();
+
+        Ok((output.op, output.d))
     } else {
         Err(())
     }
