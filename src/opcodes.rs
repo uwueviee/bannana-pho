@@ -10,10 +10,14 @@
 //! snowflake type: A string encoding a Discord Snowflake.
 //!
 //! [Source](https://gitlab.com/litecord/litecord/-/blob/master/docs/lvsp.md)
+use std::any::Any;
 use serde::{Serialize, Deserialize};
+use serde_repr::{Serialize_repr, Deserialize_repr};
+use tokio_tungstenite::tungstenite::Message;
 
 /// Op codes sent/received by Litecord
-#[derive(FromPrimitive, Deserialize, Serialize)]
+#[derive(FromPrimitive, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
 pub enum OpCode {
     /// Sent by the server when a connection is established.
     HELLO = 0,
@@ -56,6 +60,7 @@ pub enum ErrorCode {
 
 /// Message data for the socket
 #[derive(Deserialize, Serialize)]
+#[serde(untagged)]
 pub enum MessageData {
     /// Sent by the server when a connection is established.
     HELLO {
@@ -108,7 +113,8 @@ pub enum MessageData {
 }
 
 /// Info message types
-#[derive(Deserialize, Serialize)]
+#[derive(Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
 pub enum InfoType {
     /// Request a channel to be created inside the voice server.
     CHANNEL_REQ = 0,
@@ -136,6 +142,7 @@ pub enum InfoType {
 
 /// Info message data
 #[derive(Deserialize, Serialize)]
+#[serde(untagged)]
 pub enum InfoData {
     /// Request a channel to be created inside the voice server.
     ///
@@ -217,4 +224,14 @@ struct SocketMessage {
 
     /// Message data
     d: MessageData
+}
+
+pub fn check_if_opcode(msg: Message) -> Result<(), ()> {
+    let message_json: Result<SocketMessage, serde_json::Error> = serde_json::from_str(msg.to_text().expect("Failed to convert message to str!"));
+
+    if message_json.is_ok() {
+        Ok(println!("{}", message_json.unwrap().op as u8))
+    } else {
+        Err(())
+    }
 }
