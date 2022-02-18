@@ -11,7 +11,7 @@ use tokio::net::{TcpListener, TcpStream};
 
 use futures_util::{future, SinkExt, StreamExt, TryStreamExt};
 use tokio_tungstenite::tungstenite::Message;
-use crate::OpCode::{HEARTBEAT_ACK, HELLO};
+use crate::OpCode::{HEARTBEAT_ACK, HELLO, READY};
 use crate::opcodes::{check_if_opcode, MessageData, OpCode, SocketMessage};
 
 use rand::prelude::*;
@@ -90,7 +90,17 @@ async fn handle_conn(peer: SocketAddr, stream: TcpStream) -> tokio_tungstenite::
                                 match op.unwrap().0 {
                                     OpCode::IDENTIFY => {
                                         println!("IDENTIFY from {}", &peer);
-                                        unimplemented!()
+                                        println!("READY to {}", &peer);
+                                        ws_sender.send(Message::Text(
+                                            serde_json::to_string(
+                                                &SocketMessage {
+                                                    op: READY,
+                                                    d: MessageData::READY {
+                                                        health: 1.0 // trust
+                                                    }
+                                                }
+                                            ).unwrap().to_owned()
+                                        )).await?;
                                     }
 
                                     OpCode::RESUME => {
