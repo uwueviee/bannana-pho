@@ -115,12 +115,17 @@ pub struct InfoMessage {
     /// Info data, varies depending on InfoType
     data: InfoData
 }
+
 pub fn get_infotype(msg: Message) -> Result<(InfoType, InfoData), ()> {
-    let message_json: Result<Value, serde_json::Error> = serde_json::from_str(msg.to_text().expect("Failed to convert message to str!"));
+    let message_json: Result<Value, serde_json::Error> = serde_json::from_str(
+        msg.to_text().expect("Failed to convert message to str!")
+    );
 
     if message_json.is_ok() {
         // TODO: Maybe find a better way?
-        let info_data: InfoMessage = serde_json::from_value(message_json.unwrap().get("d").unwrap().clone()).unwrap();
+        let info_data: InfoMessage = serde_json::from_value(
+            message_json.unwrap().get("d").unwrap().clone()
+        ).expect("Failed to get inner data for InfoData!");
 
         Ok((info_data._type, info_data.data))
     } else {
