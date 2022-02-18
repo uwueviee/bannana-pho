@@ -61,6 +61,26 @@ pub enum ErrorCode {
     DECODE = 4002
 }
 
+/// Sent by the client to identify itself.
+#[derive(Deserialize, Serialize)]
+pub struct IDENTIFY {
+    /// HMAC SHA256 string of a shared secret and the HELLO nonce
+    pub token: String
+}
+
+/// Sent by either client or a server to send information between each other.
+///
+/// The INFO message is extensible in which many request / response scenarios are laid on.
+#[derive(Deserialize, Serialize)]
+pub struct INFO {
+    /// Info type
+    #[serde(rename = "type")]
+    pub _type: InfoType,
+
+    /// Info data, varies depending on InfoType
+    pub data: InfoData
+}
+
 /// Message data for the socket
 #[derive(Deserialize, Serialize)]
 #[serde(untagged)]
@@ -75,10 +95,7 @@ pub enum MessageData {
     },
 
     /// Sent by the client to identify itself.
-    IDENTIFY {
-        /// HMAC SHA256 string of a shared secret and the HELLO nonce
-        token: String
-    },
+    IDENTIFY(IDENTIFY),
 
     READY {
         /// Health of the server (where 0 is worst and 1 is best)
@@ -105,14 +122,7 @@ pub enum MessageData {
     ///
     /// The INFO message is extensible in which many request / response scenarios
     /// are laid on.
-    INFO {
-        /// Info type
-        #[serde(rename = "type")]
-        _type: InfoType,
-
-        /// Info data, varies depending on InfoType
-        data: InfoData
-    }
+    INFO(INFO)
 }
 
 /// Message data is defined by each opcode.

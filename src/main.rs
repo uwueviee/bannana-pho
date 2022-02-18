@@ -12,7 +12,8 @@ use tokio::net::{TcpListener, TcpStream};
 use futures_util::{future, SinkExt, StreamExt, TryStreamExt};
 use tokio_tungstenite::tungstenite::Message;
 use crate::OpCode::{HEARTBEAT_ACK, HELLO, READY};
-use crate::opcodes::{get_opcode, MessageData, OpCode, SocketMessage};
+use crate::opcodes::{get_opcode, IDENTIFY, MessageData, OpCode, SocketMessage};
+
 use crate::infoops::get_infotype;
 
 use rand::prelude::*;
@@ -95,18 +96,26 @@ async fn handle_conn(peer: SocketAddr, stream: TcpStream) -> tokio_tungstenite::
                                 let op = op.unwrap();
                                 match op.0 {
                                     OpCode::IDENTIFY => {
-                                        println!("IDENTIFY from {}", &peer);
-                                        println!("READY to {}", &peer);
-                                        ws_sender.send(Message::Text(
-                                            serde_json::to_string(
-                                                &SocketMessage {
-                                                    op: READY,
-                                                    d: MessageData::READY {
-                                                        health: 1.0 // trust
+                                        if let MessageData::IDENTIFY(dn) = op.1 {
+                                            println!("IDENTIFY from {}", &peer);
+
+                                            // TODO: Verify hash
+                                            println!("KEY: {}", dn.token);
+
+                                            println!("READY to {}", &peer);
+                                            ws_sender.send(Message::Text(
+                                                serde_json::to_string(
+                                                    &SocketMessage {
+                                                        op: READY,
+                                                        d: MessageData::READY {
+                                                            health: 1.0 // trust
+                                                        }
                                                     }
-                                                }
-                                            ).unwrap().to_owned()
-                                        )).await?;
+                                                ).unwrap().to_owned()
+                                            )).await?;
+                                        } else {
+                                            ws_sender.send(Message::Text((opcodes::ErrorCode::DECODE as i32).to_string())).await?;
+                                        }
                                     }
 
                                     OpCode::RESUME => {
@@ -130,9 +139,13 @@ async fn handle_conn(peer: SocketAddr, stream: TcpStream) -> tokio_tungstenite::
                                     }
 
                                     OpCode::INFO => {
-                                        println!("INFO from {}", &peer);
+                                        let info_data = get_infotype(msg.clone());
 
-                                        let info = get_infotype(msg).unwrap();
+                                        if info_data.is_ok() {
+                                            println!("INFO from {} with type {}", &peer,  info_data.unwrap().0 as u8);
+                                        } else {
+                                            ws_sender.send(Message::Text((opcodes::ErrorCode::DECODE as i32).to_string())).await?;
+                                        }
                                     },
 
                                     _ => {

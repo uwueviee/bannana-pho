@@ -4,6 +4,7 @@ use serde::{Serialize, Deserialize};
 use serde_json::Value;
 use serde_repr::{Serialize_repr, Deserialize_repr};
 use tokio_tungstenite::tungstenite::Message;
+use crate::opcodes::INFO;
 
 /// Info message types
 #[derive(Serialize_repr, Deserialize_repr)]
@@ -106,16 +107,6 @@ pub enum InfoData {
     }
 }
 
-#[derive(Deserialize, Serialize)]
-pub struct InfoMessage {
-    /// Info type
-    #[serde(rename = "type")]
-    _type: InfoType,
-
-    /// Info data, varies depending on InfoType
-    data: InfoData
-}
-
 pub fn get_infotype(msg: Message) -> Result<(InfoType, InfoData), ()> {
     let message_json: Result<Value, serde_json::Error> = serde_json::from_str(
         msg.to_text().expect("Failed to convert message to str!")
@@ -123,7 +114,7 @@ pub fn get_infotype(msg: Message) -> Result<(InfoType, InfoData), ()> {
 
     if message_json.is_ok() {
         // TODO: Maybe find a better way?
-        let info_data: InfoMessage = serde_json::from_value(
+        let info_data: INFO = serde_json::from_value(
             message_json.unwrap().get("d").unwrap().clone()
         ).expect("Failed to get inner data for InfoData!");
 
