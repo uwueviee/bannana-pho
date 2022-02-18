@@ -70,7 +70,10 @@ async fn handle_conn(peer: SocketAddr, stream: TcpStream) -> tokio_tungstenite::
             &SocketMessage {
                 op: HELLO,
                 d: MessageData::HELLO {
-                    heartbeat_interval: 1000,
+                    heartbeat_interval: env::var("HEARTBEAT_INTERVAL").
+                        unwrap_or("1".to_string())
+                        .parse::<i32>()
+                        .unwrap_or(1),
                     nonce
                 }
             }
