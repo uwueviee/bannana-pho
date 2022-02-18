@@ -9,6 +9,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
+name = "bannana-pho"
+version = "0.1.0"
+dependencies = [
+ "dotenv",
+ "futures-util",
+ "num",
+ "num-derive",
+ "num-traits",
+ "rand",
+ "serde",
+ "serde_json",
+ "serde_repr",
+ "tokio",
+ "tokio-tungstenite",
+]
+
+[[package]]
 name = "base64"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -217,23 +234,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51b9bbe6c47d51fc3e1a9b945965946b4c44142ab8792c50835a980d362c2710"
 dependencies = [
  "cfg-if",
-]
-
-[[package]]
-name = "lvsp-server"
-version = "0.1.0"
-dependencies = [
- "dotenv",
- "futures-util",
- "num",
- "num-derive",
- "num-traits",
- "rand",
- "serde",
- "serde_json",
- "serde_repr",
- "tokio",
- "tokio-tungstenite",
 ]
 
 [[package]]
