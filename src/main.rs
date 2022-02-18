@@ -22,7 +22,6 @@ use serde_json::Value::Array;
 
 mod opcodes;
 mod infoops;
-mod socket_decode;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
