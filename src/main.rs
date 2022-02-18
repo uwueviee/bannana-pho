@@ -64,6 +64,7 @@ async fn handle_conn(peer: SocketAddr, stream: TcpStream) -> tokio_tungstenite::
         .map(char::from)
         .collect();
 
+    println!("HELLO to {}", &peer);
     ws_sender.send(Message::Text(
         serde_json::to_string(
             &SocketMessage {
@@ -88,14 +89,18 @@ async fn handle_conn(peer: SocketAddr, stream: TcpStream) -> tokio_tungstenite::
                             if op.is_ok() {
                                 match op.unwrap().0 {
                                     OpCode::IDENTIFY => {
+                                        println!("IDENTIFY from {}", &peer);
                                         unimplemented!()
                                     }
 
                                     OpCode::RESUME => {
+                                        println!("RESUME from {}", &peer);
                                         unimplemented!()
                                     }
 
                                     OpCode::HEARTBEAT => {
+                                        println!("HEARTBEAT from {}", &peer);
+                                        println!("HEARTBEAT_ACK to {}", &peer);
                                         ws_sender.send(Message::Text(
                                             serde_json::to_string(
                                                 &SocketMessage {
@@ -109,6 +114,7 @@ async fn handle_conn(peer: SocketAddr, stream: TcpStream) -> tokio_tungstenite::
                                     }
 
                                     OpCode::INFO => {
+                                        println!("INFO from {}", &peer);
                                         unimplemented!()
                                     },
 
