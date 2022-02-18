@@ -11,12 +11,14 @@
 //!
 //! [Source](https://gitlab.com/litecord/litecord/-/blob/master/docs/lvsp.md)
 use std::any::Any;
+use num_traits::real::Real;
 use serde::{Serialize, Deserialize};
+use serde_json::Value;
 use serde_repr::{Serialize_repr, Deserialize_repr};
 use tokio_tungstenite::tungstenite::Message;
 
 /// Op codes sent/received by Litecord
-#[derive(FromPrimitive, Serialize_repr, Deserialize_repr)]
+#[derive(FromPrimitive, Serialize_repr, Deserialize_repr, PartialEq)]
 #[repr(u8)]
 pub enum OpCode {
     /// Sent by the server when a connection is established.
@@ -226,13 +228,36 @@ pub struct SocketMessage {
     pub d: MessageData
 }
 
-pub fn check_if_opcode(msg: Message) -> Result<(OpCode, MessageData), ()> {
+#[derive(Deserialize, Serialize)]
+pub struct InfoMessage {
+    /// Info type
+    #[serde(rename = "type")]
+    _type: InfoType,
+
+    /// Info data, varies depending on InfoType
+    data: InfoData
+}
+
+pub fn get_opcode(msg: Message) -> Result<(OpCode, MessageData), ()> {
     let message_json: Result<SocketMessage, serde_json::Error> = serde_json::from_str(msg.to_text().expect("Failed to convert message to str!"));
 
     if message_json.is_ok() {
         let output = message_json.unwrap();
 
         Ok((output.op, output.d))
+    } else {
+        Err(())
+    }
+}
+
+pub fn get_infotype(msg: Message) -> Result<(InfoType, InfoData), ()> {
+    let message_json: Result<Value, serde_json::Error> = serde_json::from_str(msg.to_text().expect("Failed to convert message to str!"));
+
+    if message_json.is_ok() {
+        // TODO: Maybe find a better way?
+        let info_data: InfoMessage = serde_json::from_value(message_json.unwrap().get("d").unwrap().clone()).unwrap();
+
+        Ok((info_data._type, info_data.data))
     } else {
         Err(())
     }

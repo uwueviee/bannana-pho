@@ -12,7 +12,7 @@ use tokio::net::{TcpListener, TcpStream};
 use futures_util::{future, SinkExt, StreamExt, TryStreamExt};
 use tokio_tungstenite::tungstenite::Message;
 use crate::OpCode::{HEARTBEAT_ACK, HELLO, READY};
-use crate::opcodes::{check_if_opcode, MessageData, OpCode, SocketMessage};
+use crate::opcodes::{get_opcode, get_infotype, MessageData, OpCode, SocketMessage};
 
 use rand::prelude::*;
 use rand::distributions::Alphanumeric;
@@ -88,9 +88,10 @@ async fn handle_conn(peer: SocketAddr, stream: TcpStream) -> tokio_tungstenite::
                         let msg = msg?;
 
                         if msg.is_text() {
-                            let op = check_if_opcode(msg.clone());
+                            let op = get_opcode(msg.clone());
                             if op.is_ok() {
-                                match op.unwrap().0 {
+                                let op = op.unwrap();
+                                match op.0 {
                                     OpCode::IDENTIFY => {
                                         println!("IDENTIFY from {}", &peer);
                                         println!("READY to {}", &peer);
@@ -128,7 +129,10 @@ async fn handle_conn(peer: SocketAddr, stream: TcpStream) -> tokio_tungstenite::
 
                                     OpCode::INFO => {
                                         println!("INFO from {}", &peer);
-                                        unimplemented!()
+
+                                        let info = get_infotype(msg).unwrap();
+
+                                        println!("{}", info.0 as u8);
                                     },
 
                                     _ => {
