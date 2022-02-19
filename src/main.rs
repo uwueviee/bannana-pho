@@ -98,6 +98,8 @@ async fn handle_conn(peer: SocketAddr, stream: TcpStream, redis: RedisClient, sh
         ).unwrap().to_owned()
     )).await?;
 
+    let mut identified: bool = false;
+
     loop {
         tokio::select! {
             msg = ws_receiver.next() => {
@@ -109,6 +111,14 @@ async fn handle_conn(peer: SocketAddr, stream: TcpStream, redis: RedisClient, sh
                             let op = get_opcode(msg.clone());
                             if op.is_ok() {
                                 let op = op.unwrap();
+
+                                // Check if identified
+                                if !identified && !(op.0 == OpCode::IDENTIFY) {
+                                    ws_sender.send(Message::Text((opcodes::ErrorCode::AUTH as i32).to_string())).await?;
+
+                                    continue;
+                                }
+
                                 match op.0 {
                                     OpCode::IDENTIFY => {
                                         if let MessageData::IDENTIFY(dn) = op.1 {
@@ -123,11 +133,13 @@ async fn handle_conn(peer: SocketAddr, stream: TcpStream, redis: RedisClient, sh
                                                         &SocketMessage {
                                                             op: READY,
                                                             d: MessageData::READY {
-                                                                health: 1.0 // trust
+                                                                health: 6.9 // trust
                                                             }
                                                         }
                                                     ).unwrap().to_owned()
                                                 )).await?;
+
+                                                identified = true;
                                             } else {
                                                 ws_sender.send(Message::Text((opcodes::ErrorCode::AUTH as i32).to_string())).await?;
                                             }
