@@ -16,15 +16,15 @@ pub enum InfoType {
     /// Sent by the Server to signal the successful creation of a voice channel.
     CHANNEL_ASSIGN = 1,
 
+
+    CHANNEL_UPDATE = 2,
+
     /// Sent by the client to signal the destruction of a voice channel. Be it
     /// a channel being deleted, or all members in it leaving.
-    CHANNEL_DESTROY = 2,
+    CHANNEL_DESTROY = 3,
 
     /// Sent by the client to create a voice state.
-    VST_CREATE = 3,
-
-    /// Sent by the server to indicate the success of a VST_CREATE.
-    VST_DONE = 4,
+    VST_CREATE = 4,
 
     /// Sent by the client when a user is leaving a channel OR moving between channels
     /// in a guild. More on state transitions later on.
