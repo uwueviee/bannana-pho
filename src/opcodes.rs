@@ -122,7 +122,14 @@ pub enum MessageData {
     ///
     /// The INFO message is extensible in which many request / response scenarios
     /// are laid on.
-    INFO(INFO)
+    INFO {
+        /// Info type
+        #[serde(rename = "type")]
+        _type: InfoType,
+
+        /// Info data, varies depending on InfoType
+        data: InfoData
+    }
 }
 
 /// Message data is defined by each opcode.

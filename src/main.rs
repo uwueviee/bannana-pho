@@ -1,13 +1,13 @@
 #[macro_use]
 extern crate num_derive;
 
+use std::collections::HashSet;
 use std::io::Error;
 
 use dotenv::dotenv;
 use std::env;
 use std::net::SocketAddr;
 use std::time::Duration;
-use fred::client::RedisClient;
 use tokio::net::{TcpListener, TcpStream};
 
 use futures_util::{future, SinkExt, StreamExt, TryStreamExt};
@@ -15,18 +15,20 @@ use tokio_tungstenite::tungstenite::{client, Message};
 use crate::OpCode::{HEARTBEAT_ACK, HELLO, READY};
 use crate::opcodes::{get_opcode, IDENTIFY, MessageData, OpCode, SocketMessage};
 
-use crate::infoops::get_infotype;
+use crate::infoops::{get_infotype, InfoData, InfoType};
 
 use rand::prelude::*;
 use rand::distributions::Alphanumeric;
+use redis::{Client, Connection, RedisConnectionInfo};
 
 use serde_json::Value::Array;
 use crate::util::verify_token;
 
+use redis::Commands;
+
 mod opcodes;
 mod infoops;
 mod util;
-mod redis;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -35,12 +37,8 @@ async fn main() -> Result<(), Error> {
     let shared_secret = env::var("SECRET").expect("No secret present in environment!");
 
     let addr = env::var("LISTEN_ADDR").unwrap_or("0.0.0.0:3621".to_string());
-    let redis_addr: (String, u16) = (
-        env::var("REDIS_HOST").unwrap_or("127.0.0.1:6379".to_string()),
-        env::var("REDIS_PORT").unwrap_or("6379".to_string()).parse::<u16>().expect("Failed to get Redis port!")
-    );
 
-    let redis = redis::connect_redis(redis_addr.0, redis_addr.1).await.expect("Failed to connect to Redis!");
+    let redis_client = redis::Client::open(env::var("REDIS_HOST").unwrap_or("redis://127.0.0.1:6379".to_string())).expect("Failed to connect to Redis server!");
 
     let socket = TcpListener::bind(&addr).await.expect("Failed to bind to address!");
     println!("Listening on {}!", &addr);
@@ -49,14 +47,14 @@ async fn main() -> Result<(), Error> {
         let peer = stream.peer_addr().expect("Failed to connect to peer, missing address?");
         println!("Connecting to peer {}...", &peer);
 
-        tokio::spawn(accept_conn(peer, stream, redis.clone(), shared_secret.clone()));
+        tokio::spawn(accept_conn(peer, stream, redis_client.clone(), shared_secret.clone()));
     }
 
     Ok(())
 }
 
-async fn accept_conn(peer: SocketAddr, stream: TcpStream, redis: RedisClient, shared_secret: String) {
-    if let Err(e) = handle_conn(peer, stream, redis, shared_secret).await {
+async fn accept_conn(peer: SocketAddr, stream: TcpStream, redis_client: Client, shared_secret: String) {
+    if let Err(e) = handle_conn(peer, stream, redis_client, shared_secret).await {
         match e {
             tokio_tungstenite::tungstenite::Error::ConnectionClosed | tokio_tungstenite::tungstenite::Error::Protocol(_) | tokio_tungstenite::tungstenite::Error::Utf8 => (),
             err => eprintln!("Error accepting connection from {}!", &peer),
@@ -64,7 +62,7 @@ async fn accept_conn(peer: SocketAddr, stream: TcpStream, redis: RedisClient, sh
     }
 }
 
-async fn handle_conn(peer: SocketAddr, stream: TcpStream, redis: RedisClient, shared_secret: String) -> tokio_tungstenite::tungstenite::Result<()> {
+async fn handle_conn(peer: SocketAddr, stream: TcpStream, redis_client: Client, shared_secret: String) -> tokio_tungstenite::tungstenite::Result<()> {
     let ws_stream = tokio_tungstenite::accept_async(stream)
         .await
         .expect("Failed to complete the websocket handshake!");
@@ -73,14 +71,15 @@ async fn handle_conn(peer: SocketAddr, stream: TcpStream, redis: RedisClient, sh
     let (mut ws_sender, mut ws_receiver) = ws_stream.split();
     let mut heartbeat = tokio::time::interval(Duration::from_millis(1000));
 
+    let mut redis = redis_client.get_connection().expect("Failed to get Redis connection!");
+
     let mut nonce: String = rand::thread_rng()
         .sample_iter(&Alphanumeric)
         .take(10)
         .map(char::from)
         .collect();
 
-    let _: () = redis.set(format!("{}_nonce", peer), &nonce, None, None, false)
-        .await.expect("Failed to insert nonce!");
+    let _: () = redis.set(format!("{}_nonce", peer), &nonce).expect("Failed to insert nonce!");
 
     println!("HELLO to {}", &peer);
     ws_sender.send(Message::Text(
@@ -124,7 +123,7 @@ async fn handle_conn(peer: SocketAddr, stream: TcpStream, redis: RedisClient, sh
                                         if let MessageData::IDENTIFY(dn) = op.1 {
                                             println!("IDENTIFY from {}", &peer);
 
-                                            let nonce: Option<String> = redis.get(format!("{}_nonce", peer)).await.expect("Failed to get nonce from Redis!");
+                                            let nonce: Option<String> = redis.get(format!("{}_nonce", peer)).expect("Failed to get nonce from Redis!");
 
                                             if verify_token(shared_secret.clone(), nonce, dn.token).await {
                                                 println!("READY to {}", &peer);
@@ -161,7 +160,7 @@ async fn handle_conn(peer: SocketAddr, stream: TcpStream, redis: RedisClient, sh
                                                 &SocketMessage {
                                                     op: HEARTBEAT_ACK,
                                                     d: MessageData::HEARTBEAT_ACK {
-                                                        health: 1.0 // trust
+                                                        health: 6.9 // trust
                                                     }
                                                 }
                                             ).unwrap().to_owned()
@@ -172,7 +171,61 @@ async fn handle_conn(peer: SocketAddr, stream: TcpStream, redis: RedisClient, sh
                                         let info_data = get_infotype(msg.clone());
 
                                         if info_data.is_ok() {
-                                            println!("INFO from {} with type {}", &peer,  info_data.unwrap().0 as u8);
+                                            let info = info_data.unwrap();
+
+                                            println!("INFO from {} with type {:?}", &peer,  &info.0);
+
+                                            match info.0 {
+                                                InfoType::CHANNEL_REQ => {
+                                                    if let InfoData::CHANNEL_REQ(dn) = info.1 {
+                                                        let guild_id = dn.clone().guild_id.unwrap_or("dm".to_string());
+                                                        println!("Creating voice channel for {} in {}", &dn.channel_id, &guild_id);
+
+                                                        let token: String = rand::thread_rng()
+                                                            .sample_iter(&Alphanumeric)
+                                                            .take(64)
+                                                            .map(char::from)
+                                                            .collect();
+
+                                                        let mut channel_set: HashSet<String> = HashSet::new();
+
+                                                        if channel_set.insert(format!("token_{}", token)) {
+                                                            let _: () = redis.sadd(format!("{}_{}_voice", guild_id, &dn.channel_id), channel_set)
+                                                                .expect("Failed to insert into Redis!");
+
+                                                            println!("CHANNEL_ASSIGN to {}", &peer);
+
+                                                            ws_sender.send(Message::Text(
+                                                                serde_json::to_string(
+                                                                    &SocketMessage {
+                                                                        op: OpCode::INFO,
+                                                                        d: MessageData::INFO {
+                                                                            _type: InfoType::CHANNEL_ASSIGN,
+                                                                            data: InfoData::CHANNEL_ASSIGN {
+                                                                                channel_id: dn.channel_id,
+                                                                                guild_id: dn.guild_id,
+                                                                                token
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                ).unwrap().to_owned()
+                                                            )).await?;
+                                                        } else {
+                                                            // cry about it
+                                                            ws_sender.send(Message::Text((opcodes::ErrorCode::GENERAL as i32).to_string())).await?;
+                                                        }
+                                                    } else {
+                                                        ws_sender.send(Message::Text((opcodes::ErrorCode::DECODE as i32).to_string())).await?;
+                                                    }
+                                                },
+                                                InfoType::CHANNEL_DESTROY => todo!(),
+                                                InfoType::VST_CREATE => todo!(),
+                                                InfoType::VST_UPDATE => todo!(),
+                                                InfoType::VST_LEAVE => todo!(),
+                                                _ => {
+                                                    ws_sender.send(Message::Text((opcodes::ErrorCode::DECODE as i32).to_string())).await?;
+                                                }
+                                            }
                                         } else {
                                             ws_sender.send(Message::Text((opcodes::ErrorCode::DECODE as i32).to_string())).await?;
                                         }

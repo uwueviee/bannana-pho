@@ -7,7 +7,7 @@ use tokio_tungstenite::tungstenite::Message;
 use crate::opcodes::INFO;
 
 /// Info message types
-#[derive(Serialize_repr, Deserialize_repr)]
+#[derive(FromPrimitive, Serialize_repr, Deserialize_repr, PartialEq, Debug)]
 #[repr(u8)]
 pub enum InfoType {
     /// Request a channel to be created inside the voice server.
@@ -34,6 +34,32 @@ pub enum InfoType {
     VST_LEAVE = 6
 }
 
+/// Request a channel to be created inside the voice server.
+///
+/// The Server MUST reply back with a CHANNEL_ASSIGN when resources are
+/// allocated for the channel.
+#[derive(Deserialize, Serialize, Clone)]
+pub struct CHANNEL_REQ {
+    /// Channel ID
+    pub channel_id: String,
+
+    /// Guild ID, not provided if dm / group dm
+    pub guild_id: Option<String>
+}
+
+/// Sent by the Server to signal the successful creation of a voice channel.
+#[derive(Deserialize, Serialize)]
+pub struct CHANNEL_ASSIGN {
+    /// Channel ID
+    pub channel_id: String,
+
+    /// Guild ID, not provided if dm / group dm
+    pub guild_id: Option<String>,
+
+    /// Authentication token
+    pub token: String
+}
+
 /// Info message data
 #[derive(Deserialize, Serialize)]
 #[serde(untagged)]
@@ -42,21 +68,15 @@ pub enum InfoData {
     ///
     /// The Server MUST reply back with a CHANNEL_ASSIGN when resources are
     /// allocated for the channel.
-    CHANNEL_REQ {
-        /// Channel ID
-        channel_id: u64,
-
-        /// Guild ID, not provided if dm / group dm
-        guild_id: Option<u64>
-    },
+    CHANNEL_REQ(CHANNEL_REQ),
 
     /// Sent by the Server to signal the successful creation of a voice channel.
     CHANNEL_ASSIGN {
         /// Channel ID
-        channel_id: u64,
+        channel_id: String,
 
         /// Guild ID, not provided if dm / group dm
-        guild_id: Option<u64>,
+        guild_id: Option<String>,
 
         /// Authentication token
         token: String
@@ -66,34 +86,34 @@ pub enum InfoData {
     /// a channel being deleted, or all members in it leaving.
     CHANNEL_DESTROY {
         /// Channel ID
-        channel_id: u64,
+        channel_id: String,
 
         /// Guild ID, not provided if dm / group dm
-        guild_id: Option<u64>
+        guild_id: Option<String>
     },
 
     /// Sent by the client to create a voice state.
     VST_CREATE {
         /// User ID
-        user_id: u64,
+        user_id: String,
 
         /// Channel ID
-        channel_id: u64,
+        channel_id: String,
 
         /// Guild ID, not provided if dm / group dm
-        guild_id: Option<u64>
+        guild_id: Option<String>
     },
 
     /// Sent by the server to indicate the success of a VST_CREATE.
     VST_DONE {
         /// User ID
-        user_id: u64,
+        user_id: String,
 
         /// Channel ID
-        channel_id: u64,
+        channel_id: String,
 
         /// Guild ID, not provided if dm / group dm
-        guild_id: Option<u64>,
+        guild_id: Option<String>,
 
         /// Session ID for the voice state
         session_id: String
