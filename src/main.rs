@@ -64,8 +64,16 @@ async fn accept_conn(peer: SocketAddr, stream: TcpStream, redis_client: Client, 
 
 async fn handle_conn(peer: SocketAddr, stream: TcpStream, redis_client: Client, shared_secret: String) -> tokio_tungstenite::tungstenite::Result<()> {
     let ws_stream = tokio_tungstenite::accept_async(stream)
-        .await
-        .expect("Failed to complete the websocket handshake!");
+        .await;
+
+    if ws_stream.is_err() {
+        println!("Failed to complete the websocket handshake! Dropping {}!", peer);
+
+        return Ok(());
+    }
+
+    let ws_stream = ws_stream.unwrap();
+
     println!("Connected to peer: {}!", &peer);
 
     let (mut ws_sender, mut ws_receiver) = ws_stream.split();
