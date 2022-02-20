@@ -140,15 +140,18 @@ pub enum InfoData {
 }
 
 pub async fn get_infotype(msg: Message) -> Result<(InfoType, InfoData), ()> {
-    let message_json: Result<Value, serde_json::Error> = serde_json::from_str(
-        msg.to_text().expect("Failed to convert message to str!")
-    );
+    let msg = msg.to_text().unwrap();
+    trace!(target: "infoops", "Decoding message: {}", &msg);
+
+    let message_json: Result<Value, serde_json::Error> = serde_json::from_str(msg);
 
     if message_json.is_ok() {
         // TODO: Maybe find a better way?
         let info_data: INFO = serde_json::from_value(
             message_json.unwrap().get("d").unwrap().clone()
         ).expect("Failed to get inner data for InfoData!");
+
+        trace!(target: "infoops", "Decoded as Op: {:?} Data: {:?}", &info_data._type, &info_data.data);
 
         Ok((info_data._type, info_data.data))
     } else {

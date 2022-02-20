@@ -147,10 +147,14 @@ pub struct SocketMessage {
 
 
 pub fn get_opcode(msg: Message) -> Result<(OpCode, MessageData), ()> {
-    let message_json: Result<SocketMessage, serde_json::Error> = serde_json::from_str(msg.to_text().expect("Failed to convert message to str!"));
+    let msg = msg.to_text().unwrap();
+    trace!(target: "opcodes", "Decoding message: {}", &msg);
+    let message_json: Result<SocketMessage, serde_json::Error> = serde_json::from_str(msg);
 
     if message_json.is_ok() {
         let output = message_json.unwrap();
+
+        trace!(target: "opcodes", "Decoded as Op: {:?} Data: {:?}", &output.op, &output.d);
 
         Ok((output.op, output.d))
     } else {

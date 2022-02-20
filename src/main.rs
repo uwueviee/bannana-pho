@@ -1,5 +1,6 @@
-#[macro_use]
-extern crate num_derive;
+#[macro_use]extern crate num_derive;
+
+#[macro_use] extern crate log;
 
 use std::collections::HashSet;
 use std::io::Error;
@@ -33,6 +34,7 @@ mod util;
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     dotenv().ok();
+    pretty_env_logger::init();
 
     let shared_secret = env::var("SECRET").expect("No secret present in environment!");
 
@@ -41,11 +43,11 @@ async fn main() -> Result<(), Error> {
     let redis_client = redis::Client::open(env::var("REDIS_HOST").unwrap_or("redis://127.0.0.1:6379".to_string())).expect("Failed to connect to Redis server!");
 
     let socket = TcpListener::bind(&addr).await.expect("Failed to bind to address!");
-    println!("Listening on {}!", &addr);
+    info!("Listening on {}!", &addr);
 
     while let Ok((stream, _)) = socket.accept().await {
         let peer = stream.peer_addr().expect("Failed to connect to peer, missing address?");
-        println!("Connecting to peer {}...", &peer);
+        info!(target: "initial", "Connecting to peer {}...", &peer);
 
         tokio::spawn(accept_conn(peer, stream, redis_client.clone(), shared_secret.clone()));
     }
@@ -57,7 +59,7 @@ async fn accept_conn(peer: SocketAddr, stream: TcpStream, redis_client: Client, 
     if let Err(e) = handle_conn(peer, stream, redis_client, shared_secret).await {
         match e {
             tokio_tungstenite::tungstenite::Error::ConnectionClosed | tokio_tungstenite::tungstenite::Error::Protocol(_) | tokio_tungstenite::tungstenite::Error::Utf8 => (),
-            err => eprintln!("Error accepting connection from {}!", &peer),
+            err => error!(target: "initial", "Error accepting connection from {}!", &peer),
         }
     }
 }
@@ -67,14 +69,14 @@ async fn handle_conn(peer: SocketAddr, stream: TcpStream, redis_client: Client, 
         .await;
 
     if ws_stream.is_err() {
-        println!("Failed to complete the websocket handshake! Dropping {}!", peer);
+        warn!(target: "initial", "Failed to complete the websocket handshake! Dropping {}!", peer);
 
         return Ok(());
     }
 
     let ws_stream = ws_stream.unwrap();
 
-    println!("Connected to peer: {}!", &peer);
+    info!(target: "socket", "Connected to peer: {}!", &peer);
 
     let (mut ws_sender, mut ws_receiver) = ws_stream.split();
     let mut heartbeat = tokio::time::interval(Duration::from_millis(1000));
@@ -89,7 +91,7 @@ async fn handle_conn(peer: SocketAddr, stream: TcpStream, redis_client: Client, 
 
     let _: () = redis.set(format!("{}_nonce", peer), &nonce).expect("Failed to insert nonce!");
 
-    println!("HELLO to {}", &peer);
+    debug!(target: "socket", "HELLO to {}", &peer);
     ws_sender.send(Message::Text(
         serde_json::to_string(
             &SocketMessage {
@@ -129,12 +131,12 @@ async fn handle_conn(peer: SocketAddr, stream: TcpStream, redis_client: Client, 
                                 match op.0 {
                                     OpCode::IDENTIFY => {
                                         if let MessageData::IDENTIFY(dn) = op.1 {
-                                            println!("IDENTIFY from {}", &peer);
+                                            debug!(target: "socket", "IDENTIFY from {}", &peer);
 
                                             let nonce: Option<String> = redis.get(format!("{}_nonce", peer)).expect("Failed to get nonce from Redis!");
 
                                             if verify_token(shared_secret.clone(), nonce, dn.token).await {
-                                                println!("READY to {}", &peer);
+                                                debug!(target: "socket", "READY to {}", &peer);
                                                 ws_sender.send(Message::Text(
                                                     serde_json::to_string(
                                                         &SocketMessage {
@@ -156,13 +158,13 @@ async fn handle_conn(peer: SocketAddr, stream: TcpStream, redis_client: Client, 
                                     }
 
                                     OpCode::RESUME => {
-                                        println!("RESUME from {}", &peer);
+                                        debug!(target: "socket", "RESUME from {}", &peer);
                                         unimplemented!()
                                     }
 
                                     OpCode::HEARTBEAT => {
-                                        println!("HEARTBEAT from {}", &peer);
-                                        println!("HEARTBEAT_ACK to {}", &peer);
+                                        debug!(target: "socket", "HEARTBEAT from {}", &peer);
+                                        debug!(target: "socket", "HEARTBEAT_ACK to {}", &peer);
                                         ws_sender.send(Message::Text(
                                             serde_json::to_string(
                                                 &SocketMessage {
@@ -181,13 +183,13 @@ async fn handle_conn(peer: SocketAddr, stream: TcpStream, redis_client: Client, 
                                         if info_data.is_ok() {
                                             let info = info_data.unwrap();
 
-                                            println!("INFO from {} with type {:?}", &peer,  &info.0);
+                                            debug!(target: "socket", "INFO from {} with type {:?}", &peer,  &info.0);
 
                                             match info.0 {
                                                 InfoType::CHANNEL_REQ => {
                                                     if let InfoData::CHANNEL_REQ(dn) = info.1 {
                                                         let guild_id = dn.clone().guild_id.unwrap_or("dm".to_string());
-                                                        println!("Creating voice channel for {} in {}", &dn.channel_id, &guild_id);
+                                                        debug!(target: "socket", "Creating voice channel for {} in {}", &dn.channel_id, &guild_id);
 
                                                         let token: String = rand::thread_rng()
                                                             .sample_iter(&Alphanumeric)
@@ -201,7 +203,7 @@ async fn handle_conn(peer: SocketAddr, stream: TcpStream, redis_client: Client, 
                                                             let _: () = redis.sadd(format!("{}_{}_voice", guild_id, &dn.channel_id), channel_set)
                                                                 .expect("Failed to insert into Redis!");
 
-                                                            println!("CHANNEL_ASSIGN to {}", &peer);
+                                                            debug!(target: "socket", "CHANNEL_ASSIGN to {}", &peer);
 
                                                             ws_sender.send(Message::Text(
                                                                 serde_json::to_string(
@@ -230,7 +232,7 @@ async fn handle_conn(peer: SocketAddr, stream: TcpStream, redis_client: Client, 
                                                 InfoType::VST_CREATE => {
                                                     if let InfoData::VST_CREATE(dn) = info.1 {
                                                         let guild_id = dn.clone().guild_id.unwrap_or("dm".to_string());
-                                                        println!("Creating voice state for {} in {}", &dn.channel_id, &guild_id);
+                                                        debug!(target: "socket", "Creating voice state for {} in {}", &dn.channel_id, &guild_id);
 
                                                         let session_id: String = rand::thread_rng()
                                                             .sample_iter(&Alphanumeric)
@@ -244,7 +246,7 @@ async fn handle_conn(peer: SocketAddr, stream: TcpStream, redis_client: Client, 
                                                             let _: () = redis.sadd(format!("{}_{}_voice", guild_id, &dn.channel_id), channel_set)
                                                                 .expect("Failed to insert into Redis!");
 
-                                                            println!("VOICE_STATE_DONE to {}", &peer);
+                                                            debug!(target: "socket", "VOICE_STATE_DONE to {}", &peer);
 
                                                             ws_sender.send(Message::Text(
                                                                 serde_json::to_string(
