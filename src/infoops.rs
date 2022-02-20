@@ -80,6 +80,9 @@ pub struct VST_CREATE {
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(untagged)]
 pub enum InfoData {
+    /// Sent by the client to create a voice state.
+    VST_CREATE(VST_CREATE),
+
     /// Request a channel to be created inside the voice server.
     ///
     /// The Server MUST reply back with a CHANNEL_ASSIGN when resources are
@@ -107,9 +110,6 @@ pub enum InfoData {
         /// Guild ID, not provided if dm / group dm
         guild_id: Option<String>
     },
-
-    /// Sent by the client to create a voice state.
-    VST_CREATE(VST_CREATE),
 
     /// Sent by the server to indicate the success of a VST_CREATE.
     VST_DONE {

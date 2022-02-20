@@ -220,7 +220,6 @@ async fn handle_conn(peer: SocketAddr, stream: TcpStream, redis_client: Client, 
                                                 },
                                                 InfoType::CHANNEL_DESTROY => todo!(),
                                                 InfoType::VST_CREATE => {
-                                                    println!("{:?} {:?}", &info.0, &info.1);
                                                     if let InfoData::VST_CREATE(dn) = info.1 {
                                                         let guild_id = dn.clone().guild_id.unwrap_or("dm".to_string());
                                                         println!("Creating voice state for {} in {}", &dn.channel_id, &guild_id);
