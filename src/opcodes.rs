@@ -19,7 +19,7 @@ use tokio_tungstenite::tungstenite::Message;
 use crate::infoops::{InfoData, InfoType};
 
 /// Op codes sent/received by Litecord
-#[derive(FromPrimitive, Serialize_repr, Deserialize_repr, PartialEq)]
+#[derive(FromPrimitive, Serialize_repr, Deserialize_repr, PartialEq, Debug)]
 #[repr(u8)]
 pub enum OpCode {
     /// Sent by the server when a connection is established.
@@ -62,7 +62,7 @@ pub enum ErrorCode {
 }
 
 /// Sent by the client to identify itself.
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct IDENTIFY {
     /// HMAC SHA256 string of a shared secret and the HELLO nonce
     pub token: String
@@ -71,7 +71,7 @@ pub struct IDENTIFY {
 /// Sent by either client or a server to send information between each other.
 ///
 /// The INFO message is extensible in which many request / response scenarios are laid on.
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct INFO {
     /// Info type
     #[serde(rename = "type")]
@@ -82,7 +82,7 @@ pub struct INFO {
 }
 
 /// Message data for the socket
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(untagged)]
 pub enum MessageData {
     /// Sent by the server when a connection is established.
