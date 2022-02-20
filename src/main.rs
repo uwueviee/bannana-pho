@@ -168,7 +168,7 @@ async fn handle_conn(peer: SocketAddr, stream: TcpStream, redis_client: Client, 
                                     }
 
                                     OpCode::INFO => {
-                                        let info_data = get_infotype(msg.clone());
+                                        let info_data = get_infotype(msg.clone()).await;
 
                                         if info_data.is_ok() {
                                             let info = info_data.unwrap();
@@ -219,9 +219,52 @@ async fn handle_conn(peer: SocketAddr, stream: TcpStream, redis_client: Client, 
                                                     }
                                                 },
                                                 InfoType::CHANNEL_DESTROY => todo!(),
-                                                InfoType::VST_CREATE => todo!(),
+                                                InfoType::VST_CREATE => {
+                                                    println!("{:?} {:?}", &info.0, &info.1);
+                                                    if let InfoData::VST_CREATE(dn) = info.1 {
+                                                        let guild_id = dn.clone().guild_id.unwrap_or("dm".to_string());
+                                                        println!("Creating voice state for {} in {}", &dn.channel_id, &guild_id);
+
+                                                        let session_id: String = rand::thread_rng()
+                                                            .sample_iter(&Alphanumeric)
+                                                            .take(64)
+                                                            .map(char::from)
+                                                            .collect();
+
+                                                        let mut channel_set: HashSet<String> = HashSet::new();
+
+                                                        if channel_set.insert(format!("{}", session_id)) {
+                                                            let _: () = redis.sadd(format!("{}_{}_voice", guild_id, &dn.channel_id), channel_set)
+                                                                .expect("Failed to insert into Redis!");
+
+                                                            println!("VOICE_STATE_DONE to {}", &peer);
+
+                                                            ws_sender.send(Message::Text(
+                                                                serde_json::to_string(
+                                                                    &SocketMessage {
+                                                                        op: OpCode::INFO,
+                                                                        d: MessageData::INFO {
+                                                                            _type: InfoType::VST_DONE,
+                                                                            data: InfoData::VST_DONE {
+                                                                                user_id: dn.user_id,
+                                                                                channel_id: dn.channel_id,
+                                                                                guild_id: dn.guild_id,
+                                                                                session_id
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                ).unwrap().to_owned()
+                                                            )).await?;
+                                                        } else {
+                                                            // cry about it
+                                                            ws_sender.send(Message::Text((opcodes::ErrorCode::GENERAL as i32).to_string())).await?;
+                                                        }
+                                                    } else {
+                                                        ws_sender.send(Message::Text((opcodes::ErrorCode::DECODE as i32).to_string())).await?;
+                                                    }
+                                                },
                                                 InfoType::VST_UPDATE => todo!(),
-                                                InfoType::VST_LEAVE => todo!(),
+                                                InfoType::VST_DESTROY => todo!(),
                                                 _ => {
                                                     ws_sender.send(Message::Text((opcodes::ErrorCode::DECODE as i32).to_string())).await?;
                                                 }
