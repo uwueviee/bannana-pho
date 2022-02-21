@@ -40,7 +40,7 @@ async fn main() -> Result<(), Error> {
 
     let addr = env::var("LISTEN_ADDR").unwrap_or("0.0.0.0:3621".to_string());
 
-    let redis_client = redis::Client::open(env::var("REDIS_HOST").unwrap_or("redis://127.0.0.1:6379".to_string())).expect("Failed to connect to Redis server!");
+    let redis_client = redis::Client::open(env::var("REDIS_ADDR").unwrap_or("redis://127.0.0.1:6379".to_string())).expect("Failed to connect to Redis server!");
 
     let socket = TcpListener::bind(&addr).await.expect("Failed to bind to address!");
     info!("Listening on {}!", &addr);
