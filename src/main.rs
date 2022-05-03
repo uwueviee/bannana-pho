@@ -236,7 +236,7 @@ async fn handle_conn(peer: SocketAddr, stream: TcpStream, redis_client: Client, 
 
                                                         let session_id: String = rand::thread_rng()
                                                             .sample_iter(&Alphanumeric)
-                                                            .take(64)
+                                                            .take(32)
                                                             .map(char::from)
                                                             .collect();
 
